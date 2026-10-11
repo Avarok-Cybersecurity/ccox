@@ -47,3 +47,4 @@ parse path that reads as a pass) is a security issue.
   pinned by full commit sha.
 - CI downloads `actionlint` at a pinned version and verifies its sha256 before
   running it.
+
