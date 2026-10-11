@@ -1,0 +1,116 @@
+{
+  "error-200-transient.json": {
+    "source": "hand-written",
+    "why": "HTTP 200 with an upstream ResourceExhausted error body; cannot be produced on demand"
+  },
+  "error-400-unsupported.json": {
+    "source": "live",
+    "http_status": 404,
+    "recorded_by": "https://github.com/Avarok-Cybersecurity/ccox/actions/runs/38169682547",
+    "sha256": "62c462ada893f23d896c1d3b13973d3380cdd966519ea7ca189e0ea571feaa5a",
+    "request": "pr.diff + sample.md, json_schema (response_format) with provider.require_parameters; HTTP 404, no endpoint supports response_format"
+  },
+  "error-429-burst.json": {
+    "source": "hand-written",
+    "why": "upstream burst rate limit; cannot be produced on demand"
+  },
+  "error-429-daily.json": {
+    "source": "hand-written",
+    "why": "free-models-per-day allowance exhausted; cannot be produced on demand"
+  },
+  "json_schema-violation.json": {
+    "source": "derived",
+    "from": "tool_call-violation.json",
+    "mutation": "the tool-call arguments moved to message.content, tool_calls removed, finish_reason stop (this model has no response_format endpoint, see error-400-unsupported.json)"
+  },
+  "text-prose-and-json.json": {
+    "source": "derived",
+    "from": "text-violation.json",
+    "mutation": "content prefixed with prose, so it is neither one fenced block nor only a JSON object"
+  },
+  "text-two-blocks.json": {
+    "source": "derived",
+    "from": "text-violation.json",
+    "mutation": "content wrapped as two fenced json blocks"
+  },
+  "text-violation.json": {
+    "source": "live",
+    "http_status": 200,
+    "recorded_by": "https://github.com/Avarok-Cybersecurity/ccox/actions/runs/38169682547",
+    "sha256": "c86e8874780721ca8aae74c9f7728c6d8097e4701bc6262edd422331b75db719",
+    "request": "pr.diff + sample.md, text, seed 42, reasoning low, max-tokens 8192"
+  },
+  "tool_call-arguments-object.json": {
+    "source": "derived",
+    "from": "tool_call-violation.json",
+    "mutation": "tool_calls[0].function.arguments given as a JSON object instead of a string"
+  },
+  "tool_call-bad-json.json": {
+    "source": "derived",
+    "from": "tool_call-violation.json",
+    "mutation": "arguments string cut after 40 characters"
+  },
+  "tool_call-compliant.json": {
+    "source": "live",
+    "http_status": 200,
+    "recorded_by": "https://github.com/Avarok-Cybersecurity/ccox/actions/runs/38169682547",
+    "sha256": "527b076e91cff0d59bd1bd8ed408466fdc75b7415aaddec5493913eb700522a2",
+    "request": "known-compliant.diff (allowed crates/ledger-core/) + sample.md, tool_call, seed 42, reasoning low, max-tokens 8192"
+  },
+  "tool_call-extra-key.json": {
+    "source": "derived",
+    "from": "tool_call-violation.json",
+    "mutation": "arguments gain a top-level key \"confidence\": 0.9"
+  },
+  "tool_call-inconsistent.json": {
+    "source": "derived",
+    "from": "tool_call-violation.json",
+    "mutation": "arguments verdict set to \"compliant\" while keeping the violation"
+  },
+  "tool_call-injection-compliant.json": {
+    "source": "derived",
+    "from": "tool_call-injection-violation.json",
+    "mutation": "arguments verdict \"compliant\" with no violations, injection_suspected kept true"
+  },
+  "tool_call-injection-violation.json": {
+    "source": "live",
+    "http_status": 200,
+    "recorded_by": "https://github.com/Avarok-Cybersecurity/ccox/actions/runs/38169682547",
+    "sha256": "06c4ee885a316421a213210c90e40a2d2f72d16d60cc07b425c062c491a13e12",
+    "request": "injection.diff + sample.md, tool_call, seed 42, reasoning low, max-tokens 8192"
+  },
+  "tool_call-length.json": {
+    "source": "live",
+    "http_status": 200,
+    "recorded_by": "https://github.com/Avarok-Cybersecurity/ccox/actions/runs/38169682547",
+    "sha256": "6cd99bf7cd6793952676326552ae5d2cb6cefcb547bb4427295f2bb014bfb3db",
+    "request": "pr.diff + sample.md, tool_call, seed 42, reasoning low, max-tokens 256 (finish_reason length)"
+  },
+  "tool_call-out-of-scope.json": {
+    "source": "derived",
+    "from": "tool_call-violation.json",
+    "mutation": "violations[0].file set to the excluded docs/crates/notes.md"
+  },
+  "tool_call-outside-hunk.json": {
+    "source": "derived",
+    "from": "tool_call-violation.json",
+    "mutation": "violations[0] lines set to 40..41, outside every hunk"
+  },
+  "tool_call-prose-only.json": {
+    "source": "derived",
+    "from": "tool_call-violation.json",
+    "mutation": "tool_calls removed, content set to prose, finish_reason stop"
+  },
+  "tool_call-unknown-rule.json": {
+    "source": "derived",
+    "from": "tool_call-violation.json",
+    "mutation": "violations[0].rule set to \"net-in-core\" (not declared by sample.md)"
+  },
+  "tool_call-violation.json": {
+    "source": "live",
+    "http_status": 200,
+    "recorded_by": "https://github.com/Avarok-Cybersecurity/ccox/actions/runs/38169682547",
+    "sha256": "ffde4233af9cc7efbbe6f073494041c93860b9b7d409f18772bb06ef0b90d134",
+    "request": "pr.diff + sample.md, tool_call, seed 42, reasoning low, max-tokens 8192"
+  }
+}

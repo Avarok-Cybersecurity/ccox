@@ -1,37 +1,7 @@
-{
-  "id": "gen-1760190001-a1",
-  "provider": "Nvidia",
-  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "object": "chat.completion",
-  "created": 1760190001,
-  "choices": [
-    {
-      "logprobs": null,
-      "finish_reason": "length",
-      "native_finish_reason": "length",
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "",
-        "refusal": null,
-        "reasoning": null,
-        "tool_calls": [
-          {
-            "id": "call_8f2b1c",
-            "index": 0,
-            "type": "function",
-            "function": {
-              "name": "report_verdict",
-              "arguments": "{\"verdict\":\"non_compl"
-            }
-          }
-        ]
-      }
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 1843,
-    "completion_tokens": 212,
-    "total_tokens": 2055
-  }
-}
+
+         
+
+         
+
+         
+{"id":"gen-1791748309-MAzUy12H3lVJNZRyRIGw","object":"chat.completion","created":1791748309,"model":"nvidia/nemotron-3-ultra-550b-a55b:free","provider":"Nvidia","system_fingerprint":null,"service_tier":null,"choices":[{"index":0,"logprobs":null,"finish_reason":"length","native_finish_reason":"length","message":{"role":"assistant","content":"The user wants me to evaluate a diff against a compliance definition. The compliance definition states that code under `crates/core/` must not touch the filesystem, network, clock, or environment directly. There are two rules: `io-in-core` (filesystem, network, environment access) and `clock-in-core` (system clock access).\n\nThe diff shows a file `crates/core/src/lib.rs` with added lines:\n- Line 5: `pub fn load(path: &str) -> String {`\n- Line 6: `    std::fs::read_to_string(path).unwrap()`\n- Line 7: `}`\n\nThis is clearly filesystem access (`std::fs::read_to_string`) in a core file. This violates the `io-in-core` rule.\n\nI need to report a violation with file, line range, rule, explanation, and evidence. The line range should be the added lines: 5-7. The file is exactly as in the diff header: \"crates/core/src/lib.rs\". The rule is \"io-in-core\". Explanation: The function `load` uses `std::fs::read_to_string` to read from the filesystem, which is prohibited in core. Evidence: the code lines.\n\n","refusal":null,"reasoning":"The user wants me to evaluate a diff against a compliance definition. The compliance definition states that code under `crates/core/` must not touch the filesystem, network, clock, or environment directly. There are two rules: `io-in-core` (filesystem, network, environment access) and `clock-in-core` (system clock access).\n\nThe diff shows a file `crates/core/src/lib.rs` with added lines:\n- Line 5: `pub fn load(path: &str) -> String {`\n- Line 6: `    std::fs::read_to_string(path).unwrap()`\n- Line 7: `}`\n\nThis is clearly filesystem access (`std::fs::read_to_string`) in a core file. This violates the `io-in-core` rule.\n\nI need to report a violation with file, line range, rule, explanation, and evidence. The line range should be the added lines: 5-7. The file is exactly as in the diff header: \"crates/core/src/lib.rs\". The rule is \"io-in-core\". Explanation: The function `load` uses `std::fs::read_to_string` to read from the filesystem, which is prohibited in core. Evidence: the code lines.\n\n","reasoning_details":[{"type":"reasoning.text","text":"The user wants me to evaluate a diff against a compliance definition. The compliance definition states that code under `crates/core/` must not touch the filesystem, network, clock, or environment directly. There are two rules: `io-in-core` (filesystem, network, environment access) and `clock-in-core` (system clock access).\n\nThe diff shows a file `crates/core/src/lib.rs` with added lines:\n- Line 5: `pub fn load(path: &str) -> String {`\n- Line 6: `    std::fs::read_to_string(path).unwrap()`\n- Line 7: `}`\n\nThis is clearly filesystem access (`std::fs::read_to_string`) in a core file. This violates the `io-in-core` rule.\n\nI need to report a violation with file, line range, rule, explanation, and evidence. The line range should be the added lines: 5-7. The file is exactly as in the diff header: \"crates/core/src/lib.rs\". The rule is \"io-in-core\". Explanation: The function `load` uses `std::fs::read_to_string` to read from the filesystem, which is prohibited in core. Evidence: the code lines.\n\n","format":"unknown","index":0}]}}],"usage":{"prompt_tokens":1316,"completion_tokens":256,"total_tokens":1572,"cost":0,"is_byok":false,"prompt_tokens_details":{"cached_tokens":0,"cache_write_tokens":0,"audio_tokens":0,"video_tokens":0},"cost_details":{"upstream_inference_cost":0,"upstream_inference_prompt_cost":0,"upstream_inference_completions_cost":0},"completion_tokens_details":{"reasoning_tokens":254,"image_tokens":0,"audio_tokens":0}}}

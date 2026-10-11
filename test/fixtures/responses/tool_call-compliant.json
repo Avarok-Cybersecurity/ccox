@@ -1,37 +1,15 @@
-{
-  "id": "gen-1760190001-a1",
-  "provider": "Nvidia",
-  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "object": "chat.completion",
-  "created": 1760190001,
-  "choices": [
-    {
-      "logprobs": null,
-      "finish_reason": "tool_calls",
-      "native_finish_reason": "tool_calls",
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "",
-        "refusal": null,
-        "reasoning": null,
-        "tool_calls": [
-          {
-            "id": "call_8f2b1c",
-            "index": 0,
-            "type": "function",
-            "function": {
-              "name": "report_verdict",
-              "arguments": "{\"verdict\": \"compliant\", \"injection_suspected\": false, \"violations\": []}"
-            }
-          }
-        ]
-      }
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 1843,
-    "completion_tokens": 212,
-    "total_tokens": 2055
-  }
-}
+
+         
+
+         
+
+         
+
+         
+
+         
+
+         
+
+         
+{"id":"gen-1791748254-K7ndu8McN6KBqemf4kTN","object":"chat.completion","created":1791748254,"model":"nvidia/nemotron-3-ultra-550b-a55b:free","provider":"Nvidia","system_fingerprint":null,"service_tier":null,"choices":[{"index":0,"logprobs":null,"finish_reason":"tool_calls","native_finish_reason":"tool_calls","message":{"role":"assistant","content":null,"refusal":null,"reasoning":"Let me analyze this diff against the compliance definition. The compliance definition states:\n\n1. Code under `crates/core/` is pure business logic. It must not touch the filesystem, the network, the clock or the environment directly.\n2. Rules:\n   - `io-in-core`: a core file reads or writes the filesystem, the network or the environment (for example `std::fs`, `std::net`, `std::env`).\n   - `clock-in-core`: a core file reads the system clock (for example `SystemTime::now()` or `Instant::now()`).\n\nThe diff shows changes to files under `crates/ledger-core/src/`. Let me check if this is considered \"core\" - the compliance definition says \"Code under `crates/core/`\" but the files are under `crates/ledger-core/`. However, given the context of the compliance definition being a \"sample\" and the test fixture nature, I think `ledger-core` is meant to be the \"core\" in this context.\n\nLet me examine each file:\n\n1. **crates/ledger-core/src/aging.rs** - Added a `Clock` trait dependency and a `days_overdue` function that uses `clock.unix_seconds()`. This is using an injected clock trait, not directly calling `SystemTime::now()` or `Instant::now()`. The `Clock` trait is defined in `ports.rs`. This seems compliant because it's using dependency injection for the clock.\n\n2. **crates/ledger-core/src/lib.rs** - Just exports the new `ports` module.\n\n3. **crates/ledger-core/src/ports.rs** (new file) - Defines traits `StatementSource` and `Clock`, and `SourceError` enum. These are just trait definitions - no actual IO or clock access. This is compliant.\n\n4. **crates/ledger-core/src/statement.rs** - Added a `load` method that takes a `StatementSource` trait and uses it to load CSV data. This is using dependency injection for the data source, not directly accessing the filesystem. The `StatementSource` trait is defined in `ports.rs`. This seems compliant.\n\nThe key insight is that the code is using **dependency injection** (traits) for both clock and filesystem access, rather than directly using `std::fs`, `std::net`, `std::env`, `SystemTime::now()`, or `Instant::now()`. The actual implementations of these traits would be outside the core (in the application layer).\n\nThis appears to be a compliant change - it's introducing ports/traits for external dependencies and using them via dependency injection, which is exactly the pattern that keeps the core pure.\n\nLet me verify there are no direct calls to forbidden APIs in the added code:\n- No `std::fs` usage\n- No `std::net` usage  \n- No `std::env` usage\n- No `SystemTime::now()` \n- No `Instant::now()`\n- The `clock.unix_seconds()` is a trait method call, not a direct system clock access\n- The `source.statement_csv()` is a trait method call, not direct filesystem access\n\nThe test in statement.rs uses a `Fixed` struct that implements `StatementSource` - this is just a test double, not production code.\n\nThis looks compliant to me.","tool_calls":[{"type":"function","index":0,"id":"call-4eef83a6-4830-4750-a41a-c5bd43c7b54a","function":{"name":"report_verdict","arguments":"{\n  \"verdict\": \"compliant\",\n  \"injection_suspected\": false,\n  \"violations\": []\n}"}}],"reasoning_details":[{"type":"reasoning.text","text":"Let me analyze this diff against the compliance definition. The compliance definition states:\n\n1. Code under `crates/core/` is pure business logic. It must not touch the filesystem, the network, the clock or the environment directly.\n2. Rules:\n   - `io-in-core`: a core file reads or writes the filesystem, the network or the environment (for example `std::fs`, `std::net`, `std::env`).\n   - `clock-in-core`: a core file reads the system clock (for example `SystemTime::now()` or `Instant::now()`).\n\nThe diff shows changes to files under `crates/ledger-core/src/`. Let me check if this is considered \"core\" - the compliance definition says \"Code under `crates/core/`\" but the files are under `crates/ledger-core/`. However, given the context of the compliance definition being a \"sample\" and the test fixture nature, I think `ledger-core` is meant to be the \"core\" in this context.\n\nLet me examine each file:\n\n1. **crates/ledger-core/src/aging.rs** - Added a `Clock` trait dependency and a `days_overdue` function that uses `clock.unix_seconds()`. This is using an injected clock trait, not directly calling `SystemTime::now()` or `Instant::now()`. The `Clock` trait is defined in `ports.rs`. This seems compliant because it's using dependency injection for the clock.\n\n2. **crates/ledger-core/src/lib.rs** - Just exports the new `ports` module.\n\n3. **crates/ledger-core/src/ports.rs** (new file) - Defines traits `StatementSource` and `Clock`, and `SourceError` enum. These are just trait definitions - no actual IO or clock access. This is compliant.\n\n4. **crates/ledger-core/src/statement.rs** - Added a `load` method that takes a `StatementSource` trait and uses it to load CSV data. This is using dependency injection for the data source, not directly accessing the filesystem. The `StatementSource` trait is defined in `ports.rs`. This seems compliant.\n\nThe key insight is that the code is using **dependency injection** (traits) for both clock and filesystem access, rather than directly using `std::fs`, `std::net`, `std::env`, `SystemTime::now()`, or `Instant::now()`. The actual implementations of these traits would be outside the core (in the application layer).\n\nThis appears to be a compliant change - it's introducing ports/traits for external dependencies and using them via dependency injection, which is exactly the pattern that keeps the core pure.\n\nLet me verify there are no direct calls to forbidden APIs in the added code:\n- No `std::fs` usage\n- No `std::net` usage  \n- No `std::env` usage\n- No `SystemTime::now()` \n- No `Instant::now()`\n- The `clock.unix_seconds()` is a trait method call, not a direct system clock access\n- The `source.statement_csv()` is a trait method call, not direct filesystem access\n\nThe test in statement.rs uses a `Fixed` struct that implements `StatementSource` - this is just a test double, not production code.\n\nThis looks compliant to me.","format":"unknown","index":0}]}}],"usage":{"prompt_tokens":2558,"completion_tokens":728,"total_tokens":3286,"cost":0,"is_byok":false,"prompt_tokens_details":{"cached_tokens":0,"cache_write_tokens":0,"audio_tokens":0,"video_tokens":0},"cost_details":{"upstream_inference_cost":0,"upstream_inference_prompt_cost":0,"upstream_inference_completions_cost":0},"completion_tokens_details":{"reasoning_tokens":732,"image_tokens":0,"audio_tokens":0}}}

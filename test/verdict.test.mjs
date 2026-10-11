@@ -15,15 +15,14 @@ const schema = verdictSchema(definition.rules);
 const { scanned } = partitionFiles(parseUnifiedDiff(read('./fixtures/diffs/pr.diff')), compileAllowlist(['crates/']));
 const judge = (mode, name) => judgeResponse({ mode, data: response(name), schema, files: scanned });
 
+// The violations exactly as the live model answered (fixtures/responses/provenance.json).
 const EXPECTED_VIOLATION = {
-  file: 'crates/core/src/lib.rs', line_start: 6, line_end: 6, rule: 'io-in-core',
-  explanation: 'load() reads the filesystem directly with std::fs inside the core crate; route it through an injected storage port.',
-  evidence: 'std::fs::read_to_string(path).unwrap()',
-};
-
-// Recorded live: the free model answers text mode with a bare JSON object, unfenced.
-const TEXT_VIOLATION = {
   file: 'crates/core/src/lib.rs', line_start: 5, line_end: 7, rule: 'io-in-core',
+  explanation: 'Core file reads filesystem via std::fs::read_to_string, violating io-in-core rule.',
+  evidence: 'pub fn load(path: &str) -> String {    std::fs::read_to_string(path).unwrap()}',
+};
+const TEXT_VIOLATION = {
+  ...EXPECTED_VIOLATION,
   explanation: 'The added function `load` uses `std::fs::read_to_string` to read from the filesystem, which is prohibited in core business logic.',
   evidence: 'pub fn load(path: &str) -> String {\n    std::fs::read_to_string(path).unwrap()\n}',
 };
@@ -108,10 +107,12 @@ test('injection suspected + compliant is an error, not a pass; the flag surfaces
 });
 
 test('injection suspected + violations keeps the violations and the flag', () => {
-  const r = judge('tool_call', 'tool_call-injection-violation.json');
+  // Recorded on injection.diff, so judged against that diff's scoped files.
+  const files = partitionFiles(parseUnifiedDiff(read('./fixtures/diffs/injection.diff')), compileAllowlist(['crates/'])).scanned;
+  const r = judgeResponse({ mode: 'tool_call', data: response('tool_call-injection-violation.json'), schema, files });
   assert.equal(r.status, 'violations');
   assert.equal(r.injection_suspected, true);
-  assert.equal(r.violations.length, 1);
+  assert.deepEqual(r.violations.map((v) => [v.file, v.line_start, v.line_end, v.rule]), [['crates/ledger-core/src/export.rs', 24, 24, 'io-in-core']]);
 });
 
 test('schema validator rejects wrong types, missing keys and bad integers', () => {
