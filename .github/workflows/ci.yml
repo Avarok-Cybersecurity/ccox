@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pinned lint toolchain (verified before execution).
+  ACTIONLINT_VERSION: 1.7.12
+  ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Syntax-check every ESM source
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git ls-files '*.mjs')
+          [ "${#files[@]}" -gt 0 ] || { echo '::error::no .mjs files found'; exit 1; }
+          for f in "${files[@]}"; do
+            node --check "$f"
+            echo "ok: $f"
+          done
+
+      - name: Files stay within 500 lines
+        run: |
+          set -euo pipefail
+          over=0
+          while IFS= read -r f; do
+            n=$(wc -l < "$f")
+            if [ "$n" -gt 500 ]; then echo "::error file=$f::$n lines (limit 500)"; over=1; fi
+          done < <(git ls-files '*.mjs' '*.yml' '*.md')
+          exit "$over"
+
+      - name: actionlint (pinned + checksum-verified)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+          ./actionlint -color
+
+  test:
+    name: Unit + e2e (Node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: node --test
+        run: node --test test/*.test.mjs
+
+  action-smoke:
+    # Runs the composite action itself against an unreachable endpoint: proves
+    # the INPUT_* wiring, that exit 2 fails the step, that outputs survive the
+    # failure, and that the report artifact is uploaded anyway.
+    name: Action smoke (fail closed)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run CCOX against a refused endpoint
+        id: ccox
+        continue-on-error: true
+        uses: ./
+        with:
+          provider: openai-compatible
+          endpoint: http://127.0.0.1:9/v1
+          api-key: not-a-real-key
+          model: smoke-test-model
+          structured-mode: tool_call
+          allowed-directories: crates/
+          max-diff-bytes: '60000'
+          seed: '1'
+          reasoning-effort: none
+          max-tokens: '1024'
+          request-timeout-ms: '5000'
+          max-retries: '1'
+          comment-on-pr: 'false'
+          diff-file: test/fixtures/diffs/pr.diff
+          report-dir: ccox-smoke
+          artifact-name: ccox-smoke-${{ github.run_attempt }}
+          artifact-retention-days: '1'
+
+      - name: Assert the run failed closed
+        env:
+          OUTCOME: ${{ steps.ccox.outcome }}
+          STATUS: ${{ steps.ccox.outputs.status }}
+          VIOLATIONS: ${{ steps.ccox.outputs.violations }}
+          REPORT_FILE: ${{ steps.ccox.outputs.report-file }}
+          SUMMARY_FILE: ${{ steps.ccox.outputs.summary-file }}
+        run: |
+          set -euo pipefail
+          echo "outcome=$OUTCOME status=$STATUS violations='$VIOLATIONS'"
+          [ "$OUTCOME" = failure ]
+          [ "$STATUS" = error ]
+          [ -z "$VIOLATIONS" ]
+          [ -s "$SUMMARY_FILE" ]
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const ok = r.schema === "ccox-report/v1" && r.status === "error" && r.error && r.totals.violation_count === null;
+            console.log(JSON.stringify({ status: r.status, error: r.error, totals: r.totals }));
+            process.exit(ok ? 0 : 1);
+          ' "$REPORT_FILE"
+
+      - name: Assert the report artifact was uploaded
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ccox-smoke-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=$NAME" --jq '.total_count')
+          echo "artifacts named $NAME: $n"
+          [ "$n" -eq 1 ]

@@ -1,0 +1,25 @@
+{
+  "id": "gen-1760190001-a1",
+  "provider": "Nvidia",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "object": "chat.completion",
+  "created": 1760190001,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\n  \"verdict\": \"non_compliant\",\n  \"injection_suspected\": false,\n  \"violations\": [\n    {\n      \"file\": \"crates/core/src/lib.rs\",\n      \"line_start\": 6,\n      \"line_end\": 6,\n      \"rule\": \"io-in-core\",\n      \"explanation\": \"load() reads the filesystem directly with std::fs inside the core crate; route it through an injected storage port.\",\n      \"evidence\": \"std::fs::read_to_string(path).unwrap()\"\n    }\n  ]\n}",
+        "refusal": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1843,
+    "completion_tokens": 212,
+    "total_tokens": 2055
+  }
+}

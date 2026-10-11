@@ -1,0 +1,37 @@
+{
+  "id": "gen-1760190001-a1",
+  "provider": "Nvidia",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "object": "chat.completion",
+  "created": 1760190001,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "tool_calls",
+      "native_finish_reason": "tool_calls",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "refusal": null,
+        "reasoning": null,
+        "tool_calls": [
+          {
+            "id": "call_8f2b1c",
+            "index": 0,
+            "type": "function",
+            "function": {
+              "name": "report_verdict",
+              "arguments": "{\"verdict\": \"compliant\", \"injection_suspected\": true, \"violations\": []}"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1843,
+    "completion_tokens": 212,
+    "total_tokens": 2055
+  }
+}

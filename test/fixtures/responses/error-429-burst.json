@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": 429,
+    "message": "nvidia/nemotron-3-ultra-550b-a55b:free is temporarily rate-limited upstream. Please retry shortly.",
+    "metadata": {
+      "raw": "nvidia/nemotron-3-ultra-550b-a55b:free is temporarily rate-limited upstream.",
+      "provider_name": "Nvidia"
+    }
+  }
+}

@@ -1,0 +1,136 @@
+name: CCOX Code Compliance Oracle
+description: >-
+  Ask a language model whether the in-scope part of a pull-request diff
+  complies with each compliance definition (compliances/*.md read from the
+  base commit). Fails closed: any error is status "error" (exit 2), never
+  "0 violations". Never checks out or executes pull-request code.
+author: Avarok Cybersecurity
+
+branding:
+  icon: shield
+  color: orange
+
+inputs:
+  provider:
+    description: Request dialect of the model endpoint, `openrouter` or `openai-compatible`.
+    required: true
+  endpoint:
+    description: Chat-completions API base URL (POST <endpoint>/chat/completions). https only; plain http is accepted for a loopback host.
+    required: true
+  api-key:
+    description: API key for the endpoint. Masked before any other output; sent only as a Bearer header to `endpoint`.
+    required: true
+  model:
+    description: Model id, for example the org variable OPENROUTER_DEFAULT_FREE_MODEL.
+    required: true
+  structured-mode:
+    description: How the verdict is requested, `tool_call` (forced report_verdict tool), `json_schema` (response_format) or `text` (one fenced json block).
+    required: true
+  allowed-directories:
+    description: >-
+      Newline-separated regular expressions matched at the START of each
+      changed file's repository-relative path (`crates/` matches crates/a.rs,
+      not docs/crates/a.rs). Only matching files are judged. Must not be empty.
+    required: true
+  compliance-definitions-path:
+    description: >-
+      Repository directory of compliance definitions (*.md), read through the
+      contents API at the BASE commit, never the head. Empty uses the
+      definitions bundled with this action (its compliances/ directory).
+    required: false
+    default: ''
+  max-diff-bytes:
+    description: Byte budget of rendered diff per model request; files are batched under it and a single file over it is an error.
+    required: true
+  seed:
+    description: Sampling seed sent with every request (temperature is fixed at 0).
+    required: true
+  reasoning-effort:
+    description: Reasoning effort, `none`, `low`, `medium` or `high` (`none` sends no reasoning parameter).
+    required: true
+  max-tokens:
+    description: max_tokens for each verdict request.
+    required: true
+  request-timeout-ms:
+    description: Hard timeout of each HTTP request, in milliseconds.
+    required: true
+  max-retries:
+    description: Total attempts per HTTP request (1 = no retry); only transient failures are retried, with 700 ms * 2^n backoff.
+    required: true
+  report-dir:
+    description: Directory (relative to the workspace) that receives ccox-report.json and ccox-summary.md and is uploaded as the artifact. Use a directory dedicated to CCOX.
+    required: false
+    default: ccox-report
+  artifact-name:
+    description: Name of the uploaded report artifact.
+    required: false
+    default: ccox-report-${{ github.job }}-${{ github.run_attempt }}
+  artifact-retention-days:
+    description: Retention of the report artifact, in days (1-90).
+    required: false
+    default: '90'
+  comment-on-pr:
+    description: '`true` keeps one sticky PR comment with the summary (skipped on merge_group); `false` does not comment.'
+    required: true
+  github-token:
+    description: Token for the diff, base-commit definitions and the PR comment.
+    required: false
+    default: ${{ github.token }}
+  diff-file:
+    description: Path of a unified diff to judge instead of fetching one (self-tests). Empty fetches the diff from the GitHub API.
+    required: false
+    default: ''
+
+outputs:
+  violations:
+    description: Number of violations found; empty when status is error.
+    value: ${{ steps.ccox.outputs.violations }}
+  status:
+    description: pass, violations or error.
+    value: ${{ steps.ccox.outputs.status }}
+  report-file:
+    description: Absolute path of ccox-report.json (ccox-report/v1).
+    value: ${{ steps.ccox.outputs.report-file }}
+  summary-file:
+    description: Absolute path of ccox-summary.md.
+    value: ${{ steps.ccox.outputs.summary-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: CCOX compliance oracle
+      id: ccox
+      shell: bash
+      env:
+        INPUT_PROVIDER: ${{ inputs.provider }}
+        INPUT_ENDPOINT: ${{ inputs.endpoint }}
+        INPUT_API_KEY: ${{ inputs.api-key }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_STRUCTURED_MODE: ${{ inputs.structured-mode }}
+        INPUT_ALLOWED_DIRECTORIES: ${{ inputs.allowed-directories }}
+        INPUT_COMPLIANCE_DEFINITIONS_PATH: ${{ inputs.compliance-definitions-path }}
+        INPUT_MAX_DIFF_BYTES: ${{ inputs.max-diff-bytes }}
+        INPUT_SEED: ${{ inputs.seed }}
+        INPUT_REASONING_EFFORT: ${{ inputs.reasoning-effort }}
+        INPUT_MAX_TOKENS: ${{ inputs.max-tokens }}
+        INPUT_REQUEST_TIMEOUT_MS: ${{ inputs.request-timeout-ms }}
+        INPUT_MAX_RETRIES: ${{ inputs.max-retries }}
+        INPUT_REPORT_DIR: ${{ inputs.report-dir }}
+        INPUT_ARTIFACT_NAME: ${{ inputs.artifact-name }}
+        INPUT_ARTIFACT_RETENTION_DAYS: ${{ inputs.artifact-retention-days }}
+        INPUT_COMMENT_ON_PR: ${{ inputs.comment-on-pr }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_DIFF_FILE: ${{ inputs.diff-file }}
+        CCOX_ACTION_REPOSITORY: ${{ github.action_repository }}
+        CCOX_ACTION_REF: ${{ github.action_ref }}
+      # Exit code: 0 pass, 1 violations, 2 error.
+      run: node "$GITHUB_ACTION_PATH/src/main.mjs"
+
+    - name: Upload ccox-report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.report-dir }}
+        retention-days: ${{ inputs.artifact-retention-days }}
+        if-no-files-found: error

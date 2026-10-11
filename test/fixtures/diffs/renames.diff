@@ -1,0 +1,20 @@
+diff --git a/crates/core/r.rs b/crates/core/r2.rs
+similarity index 92%
+rename from crates/core/r.rs
+rename to crates/core/r2.rs
+index 0ff3bbb..6c69c71 100644
+--- a/crates/core/r.rs
++++ b/crates/core/r2.rs
+@@ -7,7 +7,7 @@
+ 7
+ 8
+ 9
+-10
++ten
+ 11
+ 12
+ 13
+diff --git a/crates/core/pure.rs b/docs/pure.rs
+similarity index 100%
+rename from crates/core/pure.rs
+rename to docs/pure.rs

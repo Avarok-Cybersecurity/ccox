@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": 400,
+    "message": "Provider returned error",
+    "metadata": {
+      "raw": "{\"error\":\"response_format is not supported by this model\"}",
+      "provider_name": "Nvidia"
+    }
+  }
+}
