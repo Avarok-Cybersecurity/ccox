@@ -139,11 +139,13 @@ export function extractPayload(mode, data) {
     return parseJson(text, 'answer');
   }
   if (mode === 'text') {
-    const blocks = [...messageText(message).matchAll(/```json[ \t]*\r?\n([\s\S]*?)\r?\n```/g)];
-    if (blocks.length !== 1) {
-      throw new CcoxError('parse', `expected exactly one fenced json block, found ${blocks.length}`);
-    }
-    return parseJson(blocks[0][1], 'fenced json block');
+    // One fenced block, or (as models often answer) a message that is only a JSON object.
+    const text = messageText(message);
+    const blocks = [...text.matchAll(/```json[ \t]*\r?\n([\s\S]*?)\r?\n```/g)];
+    if (blocks.length === 1) return parseJson(blocks[0][1], 'fenced json block');
+    const bare = text.trim();
+    if (blocks.length === 0 && bare.startsWith('{') && bare.endsWith('}')) return parseJson(bare, 'answer');
+    throw new CcoxError('parse', `expected exactly one fenced json block or only a JSON object, found ${blocks.length} block(s)`);
   }
   throw new CcoxError('internal', `unknown structured mode ${JSON.stringify(mode)}`);
 }

@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Definitions read at the base commit through the contents API when
   `compliance-definitions-path` is set, else the bundled `compliances/`.
 - Prompt with the definition verbatim and the diff inside random-nonce
-  sentinels; structured modes `tool_call`, `json_schema` and `text`.
+  sentinels; structured modes `tool_call`, `json_schema` and `text` (one
+  fenced json block, or a message that is only a JSON object, which is how
+  the free Nemotron answers).
 - Verdict validation: JSON Schema, rule ids from the definition, citations
   restricted to scoped files and hunk lines, injection flag handling.
 - Provider handling: HTTP-200-with-error bodies, transient retry with

@@ -21,17 +21,24 @@ const EXPECTED_VIOLATION = {
   evidence: 'std::fs::read_to_string(path).unwrap()',
 };
 
-for (const [mode, name] of [
-  ['tool_call', 'tool_call-violation.json'],
-  ['tool_call', 'tool_call-arguments-object.json'],
-  ['json_schema', 'json_schema-violation.json'],
-  ['text', 'text-violation.json'],
+// Recorded live: the free model answers text mode with a bare JSON object, unfenced.
+const TEXT_VIOLATION = {
+  file: 'crates/core/src/lib.rs', line_start: 5, line_end: 7, rule: 'io-in-core',
+  explanation: 'The added function `load` uses `std::fs::read_to_string` to read from the filesystem, which is prohibited in core business logic.',
+  evidence: 'pub fn load(path: &str) -> String {\n    std::fs::read_to_string(path).unwrap()\n}',
+};
+
+for (const [mode, name, expected] of [
+  ['tool_call', 'tool_call-violation.json', EXPECTED_VIOLATION],
+  ['tool_call', 'tool_call-arguments-object.json', EXPECTED_VIOLATION],
+  ['json_schema', 'json_schema-violation.json', EXPECTED_VIOLATION],
+  ['text', 'text-violation.json', TEXT_VIOLATION],
 ]) {
   test(`${mode}: ${name} parses to one violation`, () => {
     const r = judge(mode, name);
     assert.equal(r.status, 'violations');
     assert.equal(r.verdict, 'non_compliant');
-    assert.deepEqual(r.violations, [EXPECTED_VIOLATION]);
+    assert.deepEqual(r.violations, [expected]);
     assert.equal(r.error, null);
   });
 }
@@ -45,11 +52,12 @@ test('tool_call: compliant answer is a pass with no violations', () => {
 test('a response for one mode does not parse under another (no silent fallback)', () => {
   assert.equal(judge('json_schema', 'tool_call-violation.json').error.kind, 'parse');
   assert.equal(judge('tool_call', 'json_schema-violation.json').error.kind, 'parse');
-  assert.equal(judge('text', 'json_schema-violation.json').error.kind, 'parse');
+  assert.equal(judge('text', 'tool_call-violation.json').error.kind, 'parse');
 });
 
 for (const [name, mode, kind] of [
   ['text-two-blocks.json', 'text', 'parse'],
+  ['text-prose-and-json.json', 'text', 'parse'],
   ['tool_call-bad-json.json', 'tool_call', 'parse'],
   ['tool_call-length.json', 'tool_call', 'parse'],
   ['tool_call-prose-only.json', 'tool_call', 'parse'],

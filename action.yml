@@ -24,7 +24,7 @@ inputs:
     description: Model id, for example the org variable OPENROUTER_DEFAULT_FREE_MODEL.
     required: true
   structured-mode:
-    description: How the verdict is requested, `tool_call` (forced report_verdict tool), `json_schema` (response_format) or `text` (one fenced json block).
+    description: How the verdict is requested, `tool_call` (forced report_verdict tool), `json_schema` (response_format) or `text` (one fenced json block, or a message that is only a JSON object).
     required: true
   allowed-directories:
     description: >-

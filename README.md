@@ -86,7 +86,7 @@ major tag.
 | `endpoint` | yes | chat-completions base URL; `https://` only (plain `http://` only to a loopback host) |
 | `api-key` | yes | endpoint key; masked first, sent only as a Bearer header to `endpoint` |
 | `model` | yes | model id |
-| `structured-mode` | yes | `tool_call` (forced `report_verdict` tool), `json_schema` (`response_format`) or `text` (one fenced json block) |
+| `structured-mode` | yes | `tool_call` (forced `report_verdict` tool), `json_schema` (`response_format`) or `text` (one fenced json block, or a message that is only a JSON object) |
 | `allowed-directories` | yes | newline-separated regexes matched at the **start** of each path; only matching files are judged |
 | `compliance-definitions-path` | no | repo directory of `*.md` definitions, read at the base commit; empty uses the definitions bundled with the action |
 | `max-diff-bytes` | yes | rendered-diff bytes per request; files are batched under it, a single larger file is an error |
