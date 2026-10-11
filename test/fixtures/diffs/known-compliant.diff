@@ -1,0 +1,193 @@
+diff --git a/crates/ledger-cli/src/main.rs b/crates/ledger-cli/src/main.rs
+new file mode 100644
+index 0000000..c462bb3
+--- /dev/null
++++ b/crates/ledger-cli/src/main.rs
+@@ -0,0 +1,29 @@
++//! ledger-cli: the composition root. Reads explicit configuration, builds the
++//! std adapters and hands them to the core.
++
++use std::path::PathBuf;
++use std::process::ExitCode;
++
++use ledger_core::statement::Statement;
++use ledger_io_std::FsStatementSource;
++
++fn main() -> ExitCode {
++    let Ok(dir) = std::env::var("LEDGER_EXPORT_DIR") else {
++        eprintln!("LEDGER_EXPORT_DIR is required");
++        return ExitCode::from(2);
++    };
++    let Some(account) = std::env::args().nth(1) else {
++        eprintln!("usage: ledger-cli <account>");
++        return ExitCode::from(2);
++    };
++    match Statement::load(&FsStatementSource::new(PathBuf::from(dir)), &account) {
++        Ok(s) => {
++            println!("{}", ledger_core::money::format_cents(s.total()));
++            ExitCode::SUCCESS
++        }
++        Err(e) => {
++            eprintln!("cannot load {account}: {e:?}");
++            ExitCode::FAILURE
++        }
++    }
++}
+diff --git a/crates/ledger-core/src/aging.rs b/crates/ledger-core/src/aging.rs
+index 595f078..5e70770 100644
+--- a/crates/ledger-core/src/aging.rs
++++ b/crates/ledger-core/src/aging.rs
+@@ -1,6 +1,7 @@
+ //! Receivable aging buckets.
+ 
+ use crate::money::Cents;
++use crate::ports::Clock;
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum Bucket {
+@@ -22,3 +23,9 @@ pub fn bucket_for(days_overdue: u32) -> Bucket {
+ pub fn overdue_total(items: &[(u32, Cents)], bucket: Bucket) -> Cents {
+     items.iter().filter(|(d, _)| bucket_for(*d) == bucket).map(|(_, c)| *c).sum()
+ }
++
++/// Days an invoice issued at `issued_unix_s` is past its `net_days` terms.
++pub fn days_overdue<C: Clock>(clock: &C, issued_unix_s: u64, net_days: u32) -> u32 {
++    let age_days = (clock.unix_seconds().saturating_sub(issued_unix_s) / 86_400) as u32;
++    age_days.saturating_sub(net_days)
++}
+diff --git a/crates/ledger-core/src/lib.rs b/crates/ledger-core/src/lib.rs
+index bbefde9..1af8375 100644
+--- a/crates/ledger-core/src/lib.rs
++++ b/crates/ledger-core/src/lib.rs
+@@ -1,3 +1,4 @@
+ pub mod aging;
+ pub mod money;
++pub mod ports;
+ pub mod statement;
+diff --git a/crates/ledger-core/src/ports.rs b/crates/ledger-core/src/ports.rs
+new file mode 100644
+index 0000000..ae2bab8
+--- /dev/null
++++ b/crates/ledger-core/src/ports.rs
+@@ -0,0 +1,17 @@
++//! What the ledger core needs from the outside world, as traits.
++
++/// Supplies the raw CSV export of one account.
++pub trait StatementSource {
++    fn statement_csv(&self, account: &str) -> Result<String, SourceError>;
++}
++
++/// Wall-clock time in whole seconds since the Unix epoch.
++pub trait Clock {
++    fn unix_seconds(&self) -> u64;
++}
++
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum SourceError {
++    NotFound,
++    Unreadable,
++}
+diff --git a/crates/ledger-core/src/statement.rs b/crates/ledger-core/src/statement.rs
+index 2da6f24..0a74682 100644
+--- a/crates/ledger-core/src/statement.rs
++++ b/crates/ledger-core/src/statement.rs
+@@ -1,6 +1,7 @@
+ //! Monthly statements: totals and line ordering for one account.
+ 
+ use crate::money::Cents;
++use crate::ports::{SourceError, StatementSource};
+ 
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Entry {
+@@ -9,6 +10,12 @@ pub struct Entry {
+     pub memo: String,
+ }
+ 
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum StatementError {
++    Source(SourceError),
++    BadLine(usize),
++}
++
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Statement {
+     pub account: String,
+@@ -24,4 +31,37 @@ impl Statement {
+         self.entries.sort_by_key(|e| e.posted_day);
+         self
+     }
++
++    /// Loads an account's statement through the injected source.
++    pub fn load<S: StatementSource>(source: &S, account: &str) -> Result<Self, StatementError> {
++        let raw = source.statement_csv(account).map_err(StatementError::Source)?;
++        let mut entries = Vec::new();
++        for (n, line) in raw.lines().enumerate() {
++            let cols: Vec<&str> = line.splitn(3, ',').collect();
++            let [day, cents, memo] = cols[..] else { return Err(StatementError::BadLine(n + 1)) };
++            let posted_day = day.parse().map_err(|_| StatementError::BadLine(n + 1))?;
++            let amount = cents.parse().map_err(|_| StatementError::BadLine(n + 1))?;
++            entries.push(Entry { posted_day, amount, memo: memo.to_owned() });
++        }
++        Ok(Self { account: account.to_owned(), entries })
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    struct Fixed(&'static str);
++
++    impl StatementSource for Fixed {
++        fn statement_csv(&self, _account: &str) -> Result<String, SourceError> {
++            Ok(self.0.to_owned())
++        }
++    }
++
++    #[test]
++    fn loads_and_totals() {
++        let s = Statement::load(&Fixed("2,150,coffee\n1,-50,refund"), "acct-1").unwrap();
++        assert_eq!(s.total(), 100);
++    }
+ }
+diff --git a/crates/ledger-io-std/src/lib.rs b/crates/ledger-io-std/src/lib.rs
+new file mode 100644
+index 0000000..9f25bf8
+--- /dev/null
++++ b/crates/ledger-io-std/src/lib.rs
+@@ -0,0 +1,35 @@
++//! std-backed adapters for the ledger-core ports.
++
++use std::path::PathBuf;
++use std::time::{SystemTime, UNIX_EPOCH};
++
++use ledger_core::ports::{Clock, SourceError, StatementSource};
++
++/// Reads `<dir>/<account>.csv` from the nightly export directory.
++pub struct FsStatementSource {
++    dir: PathBuf,
++}
++
++impl FsStatementSource {
++    pub fn new(dir: PathBuf) -> Self {
++        Self { dir }
++    }
++}
++
++impl StatementSource for FsStatementSource {
++    fn statement_csv(&self, account: &str) -> Result<String, SourceError> {
++        std::fs::read_to_string(self.dir.join(format!("{account}.csv"))).map_err(|e| match e.kind() {
++            std::io::ErrorKind::NotFound => SourceError::NotFound,
++            _ => SourceError::Unreadable,
++        })
++    }
++}
++
++/// The operating-system clock.
++pub struct SystemClock;
++
++impl Clock for SystemClock {
++    fn unix_seconds(&self) -> u64 {
++        SystemTime::now().duration_since(UNIX_EPOCH).expect("system clock before 1970").as_secs()
++    }
++}

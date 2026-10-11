@@ -1,0 +1,99 @@
+diff --git a/crates/ledger-core/src/aging.rs b/crates/ledger-core/src/aging.rs
+index 595f078..20505c4 100644
+--- a/crates/ledger-core/src/aging.rs
++++ b/crates/ledger-core/src/aging.rs
+@@ -22,3 +22,13 @@ pub fn bucket_for(days_overdue: u32) -> Bucket {
+ pub fn overdue_total(items: &[(u32, Cents)], bucket: Bucket) -> Cents {
+     items.iter().filter(|(d, _)| bucket_for(*d) == bucket).map(|(_, c)| *c).sum()
+ }
++
++/// Days an invoice issued at `issued_unix_s` is past its `net_days` terms.
++pub fn days_overdue(issued_unix_s: u64, net_days: u32) -> u32 {
++    let now = std::time::SystemTime::now()
++        .duration_since(std::time::UNIX_EPOCH)
++        .expect("system clock before 1970")
++        .as_secs();
++    let age_days = (now.saturating_sub(issued_unix_s) / 86_400) as u32;
++    age_days.saturating_sub(net_days)
++}
+diff --git a/crates/ledger-core/src/money.rs b/crates/ledger-core/src/money.rs
+index dae5e1d..e65ea06 100644
+--- a/crates/ledger-core/src/money.rs
++++ b/crates/ledger-core/src/money.rs
+@@ -6,3 +6,9 @@ pub fn format_cents(c: Cents) -> String {
+     let sign = if c < 0 { "-" } else { "" };
+     format!("{sign}{}.{:02}", c.abs() / 100, c.abs() % 100)
+ }
++
++/// Splits `total` into `parts` amounts that differ by at most one cent.
++pub fn split_even(total: Cents, parts: u32) -> Vec<Cents> {
++    let n = Cents::from(parts.max(1));
++    (0..n).map(|i| total / n + Cents::from(i < total % n)).collect()
++}
+diff --git a/crates/ledger-core/src/statement.rs b/crates/ledger-core/src/statement.rs
+index 2da6f24..9add80d 100644
+--- a/crates/ledger-core/src/statement.rs
++++ b/crates/ledger-core/src/statement.rs
+@@ -1,5 +1,7 @@
+ //! Monthly statements: totals and line ordering for one account.
+ 
++use std::path::Path;
++
+ use crate::money::Cents;
+ 
+ #[derive(Debug, Clone, PartialEq, Eq)]
+@@ -9,6 +11,18 @@ pub struct Entry {
+     pub memo: String,
+ }
+ 
++#[derive(Debug)]
++pub enum StatementError {
++    Io(std::io::Error),
++    BadLine(usize),
++}
++
++impl From<std::io::Error> for StatementError {
++    fn from(e: std::io::Error) -> Self {
++        StatementError::Io(e)
++    }
++}
++
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct Statement {
+     pub account: String,
+@@ -24,4 +38,25 @@ impl Statement {
+         self.entries.sort_by_key(|e| e.posted_day);
+         self
+     }
++
++    /// Loads an account's statement from the nightly CSV export.
++    pub fn load(export_dir: &Path, account: &str) -> Result<Self, StatementError> {
++        let raw = std::fs::read_to_string(export_dir.join(format!("{account}.csv")))?;
++        Self::parse(account, &raw)
++    }
++
++    /// Parses `day,cents,memo` lines.
++    pub fn parse(account: &str, raw: &str) -> Result<Self, StatementError> {
++        let mut entries = Vec::new();
++        for (n, line) in raw.lines().enumerate() {
++            let mut cols = line.splitn(3, ',');
++            let (Some(day), Some(cents), Some(memo)) = (cols.next(), cols.next(), cols.next()) else {
++                return Err(StatementError::BadLine(n + 1));
++            };
++            let posted_day = day.parse().map_err(|_| StatementError::BadLine(n + 1))?;
++            let amount = cents.parse().map_err(|_| StatementError::BadLine(n + 1))?;
++            entries.push(Entry { posted_day, amount, memo: memo.to_owned() });
++        }
++        Ok(Self { account: account.to_owned(), entries })
++    }
+ }
+diff --git a/docs/ledger.md b/docs/ledger.md
+index ce1a605..f87382e 100644
+--- a/docs/ledger.md
++++ b/docs/ledger.md
+@@ -1,3 +1,5 @@
+ # Ledger
+ 
+ The ledger core computes statements and aging buckets.
++
++Statements load from the nightly CSV export; aging uses net terms.

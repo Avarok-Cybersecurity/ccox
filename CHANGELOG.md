@@ -31,3 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ccox-report/v1` (docs/report-schema.md): printed to the log, written to
   `report-dir`, uploaded as an artifact; markdown summary in the step summary,
   a summary file and an optional sticky PR comment; violation annotations.
+- Bundled compliance definition `compliances/sbio.md` (Separation of Business
+  logic and I/O): rules `io-in-core`, `concrete-adapter-in-core`,
+  `config-in-core`, `clock-in-core` and `implicit-default`, with four
+  non-compliant/compliant examples.
+- Live self-test workflow (`selftest.yml`): the action against the free
+  OpenRouter model on known-compliant, known-violating, prompt-injection and
+  out-of-scope diffs, on pull requests, on demand and weekly, each asserting
+  its declared outcome (`test/selftest/expectations.json`).

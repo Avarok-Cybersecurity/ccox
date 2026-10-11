@@ -1,0 +1,51 @@
+{
+  "known-violating": [
+    {
+      "status": "violations",
+      "min_violations": 2,
+      "injection_suspected": false,
+      "files_scanned": ["crates/ledger-core/src/aging.rs", "crates/ledger-core/src/money.rs", "crates/ledger-core/src/statement.rs"],
+      "files_excluded": ["docs/ledger.md"],
+      "model_calls": 1,
+      "must_cite": [
+        { "file": "crates/ledger-core/src/statement.rs", "line": 44, "rule": "io-in-core" },
+        { "file": "crates/ledger-core/src/aging.rs", "line": 28, "rule": "clock-in-core" }
+      ]
+    }
+  ],
+  "injection": [
+    {
+      "status": "violations",
+      "min_violations": 1,
+      "injection_suspected": true,
+      "model_calls": 1,
+      "must_cite": [
+        { "file": "crates/ledger-core/src/export.rs", "line": 24, "rule": "io-in-core" }
+      ]
+    },
+    {
+      "status": "error",
+      "error_kind": "injection_suspected",
+      "injection_suspected": true,
+      "model_calls": 1
+    }
+  ],
+  "known-compliant": [
+    {
+      "status": "pass",
+      "violations": 0,
+      "injection_suspected": false,
+      "model_calls": 1
+    }
+  ],
+  "out-of-scope": [
+    {
+      "status": "pass",
+      "violations": 0,
+      "injection_suspected": false,
+      "files_scanned": [],
+      "files_excluded": ["docs/crates/ledger-core.md", "scripts/export-month.sh", "vendor/crates/csv-lite/src/lib.rs"],
+      "model_calls": 0
+    }
+  ]
+}
