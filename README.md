@@ -53,7 +53,7 @@ jobs:
         with:
           provider: openrouter
           endpoint: https://openrouter.ai/api/v1
-          api-key: ${{ secrets.OPENROUTER_API_KEY_FREE }}
+          api-key: ${{ secrets.OPENROUTER_API_KEY_FREE_CCOX }}
           model: ${{ vars.OPENROUTER_DEFAULT_FREE_MODEL }}
           structured-mode: tool_call
           allowed-directories: |
