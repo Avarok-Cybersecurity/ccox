@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The README usage example and the live self-test use the dedicated secret
+  `OPENROUTER_API_KEY_FREE_CCOX`, so CCOX's free-model quota is not shared
+  with other workflows.
+- CCOX runs on its own pull requests (`.github/workflows/ccox.yml`, scope
+  `src/`).
+
 ## [1.0.0] - 2026-10-11
 
 ### Added
