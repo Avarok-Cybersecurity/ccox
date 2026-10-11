@@ -1,0 +1,25 @@
+{
+  "id": "gen-1760190001-a1",
+  "provider": "Nvidia",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "object": "chat.completion",
+  "created": 1760190001,
+  "choices": [
+    {
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The change looks compliant to me.",
+        "tool_calls": []
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1843,
+    "completion_tokens": 212,
+    "total_tokens": 2055
+  }
+}

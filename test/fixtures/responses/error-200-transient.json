@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": 502,
+    "message": "Upstream error from Nvidia: ResourceExhausted: model is overloaded, please retry",
+    "metadata": {
+      "provider_name": "Nvidia"
+    }
+  },
+  "user_id": "user_2x"
+}
