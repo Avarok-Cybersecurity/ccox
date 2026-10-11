@@ -42,9 +42,9 @@ test('definitions load in file-name order', () => {
   assert.deepEqual(defs.map((d) => d.name), ['alpha', 'zeta']);
 });
 
-test('the definition appears verbatim in the user message', () => {
+test('the definition appears verbatim in the user message, byte for byte', () => {
   const [, user] = messages();
-  assert.ok(user.content.includes(SAMPLE));
+  assert.ok(user.content.startsWith(`# Compliance definition: sample\n\n${SAMPLE}\n\n# Diff under review`));
 });
 
 test('the diff sits between nonce sentinels and nowhere else', () => {
