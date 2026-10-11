@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Definitions read at the base commit through the contents API when
   `compliance-definitions-path` is set, else the bundled `compliances/`.
 - Prompt with the definition verbatim and the diff inside random-nonce
-  sentinels; structured modes `tool_call`, `json_schema` and `text`.
+  sentinels; structured modes `tool_call`, `json_schema` and `text` (one
+  fenced json block, or a message that is only a JSON object, which is how
+  the free Nemotron answers).
 - Verdict validation: JSON Schema, rule ids from the definition, citations
   restricted to scoped files and hunk lines, injection flag handling.
 - Provider handling: HTTP-200-with-error bodies, transient retry with
@@ -31,3 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ccox-report/v1` (docs/report-schema.md): printed to the log, written to
   `report-dir`, uploaded as an artifact; markdown summary in the step summary,
   a summary file and an optional sticky PR comment; violation annotations.
+- Bundled compliance definition `compliances/sbio.md` (Separation of Business
+  logic and I/O): rules `io-in-core`, `concrete-adapter-in-core`,
+  `config-in-core`, `clock-in-core` and `implicit-default`, with four
+  non-compliant/compliant examples.
+- Live self-test workflow (`selftest.yml`): the action against the free
+  OpenRouter model on known-compliant, known-violating, prompt-injection and
+  out-of-scope diffs, on pull requests, on demand and weekly, each asserting
+  its declared outcome (`test/selftest/expectations.json`).

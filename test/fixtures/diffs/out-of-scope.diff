@@ -1,0 +1,39 @@
+diff --git a/docs/crates/ledger-core.md b/docs/crates/ledger-core.md
+new file mode 100644
+index 0000000..0ef365c
+--- /dev/null
++++ b/docs/crates/ledger-core.md
+@@ -0,0 +1,4 @@
++# ledger-core
++
++Pure statement and aging logic. Callers pass bytes in; the crate never calls
++`std::fs::read_to_string` or `SystemTime::now()` itself.
+diff --git a/scripts/export-month.sh b/scripts/export-month.sh
+new file mode 100644
+index 0000000..defee04
+--- /dev/null
++++ b/scripts/export-month.sh
+@@ -0,0 +1,4 @@
++#!/usr/bin/env bash
++set -euo pipefail
++: "${LEDGER_EXPORT_DIR:?set LEDGER_EXPORT_DIR}"
++cargo run -p ledger-cli -- export --dir "$LEDGER_EXPORT_DIR" --month "$1"
+diff --git a/vendor/crates/csv-lite/src/lib.rs b/vendor/crates/csv-lite/src/lib.rs
+new file mode 100644
+index 0000000..fadb8ec
+--- /dev/null
++++ b/vendor/crates/csv-lite/src/lib.rs
+@@ -0,0 +1,13 @@
++//! Vendored CSV reader (upstream copy, not first-party code).
++
++pub fn read_rows(path: &str) -> std::io::Result<Vec<Vec<String>>> {
++    let text = std::fs::read_to_string(path)?;
++    let started = std::time::Instant::now();
++    let rows = text.lines().map(|l| l.split(',').map(str::to_owned).collect()).collect();
++    log_elapsed(started.elapsed());
++    Ok(rows)
++}
++
++fn log_elapsed(d: std::time::Duration) {
++    eprintln!("csv-lite: parsed in {d:?}");
++}

@@ -32,9 +32,10 @@ test('the per-day free-model allowance is kind quota and NOT retried (200 or 429
   assert.throws(() => classify(429, 'error-429-daily.json'), /resets at 2025-10-12T00:00:00.000Z/);
 });
 
-test('a short burst 429 is transient; a 400 is not; 5xx is transient', () => {
+test('a short burst 429 is transient; an unroutable request is not; 5xx is transient', () => {
   throwsKind(() => classify(429, 'error-429-burst.json'), 'provider', true);
-  throwsKind(() => classify(400, 'error-400-unsupported.json'), 'provider', false);
+  // Recorded live: json_schema with require_parameters has no endpoint on the free model (HTTP 404).
+  throwsKind(() => classify(404, 'error-400-unsupported.json'), 'provider', false);
   throwsKind(() => classifyProviderResponse({ status: 503, text: 'Service Unavailable', resetHeader: null }), 'provider', true);
   throwsKind(() => classifyProviderResponse({ status: 200, text: '<html>', resetHeader: null }), 'provider', false);
 });

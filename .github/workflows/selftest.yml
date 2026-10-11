@@ -1,0 +1,71 @@
+name: Self-test
+
+# Live self-test: the action, as consumers run it, against the free OpenRouter
+# model with the bundled definitions (compliances/), one job per fixture diff
+# in test/fixtures/diffs/. Each job asserts the outcome declared for its
+# fixture in test/selftest/expectations.json. Weekly runs catch drift in the
+# model or the provider without any change here.
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 5 * * 1'
+
+concurrency:
+  group: selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    name: Live self-test (${{ matrix.fixture }})
+    # Secrets reach same-repository pull requests only; Dependabot has none.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: [known-violating, injection, known-compliant, out-of-scope]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: CCOX on ${{ matrix.fixture }}.diff
+        id: ccox
+        continue-on-error: true
+        uses: ./
+        with:
+          provider: openrouter
+          endpoint: https://openrouter.ai/api/v1
+          api-key: ${{ secrets.OPENROUTER_API_KEY_FREE }}
+          model: ${{ vars.OPENROUTER_DEFAULT_FREE_MODEL }}
+          structured-mode: tool_call
+          allowed-directories: crates/
+          compliance-definitions-path: ''
+          max-diff-bytes: '60000'
+          seed: '42'
+          reasoning-effort: low
+          max-tokens: '8192'
+          request-timeout-ms: '300000'
+          max-retries: '3'
+          comment-on-pr: 'false'
+          diff-file: test/fixtures/diffs/${{ matrix.fixture }}.diff
+          report-dir: ccox-selftest
+          artifact-name: ccox-selftest-${{ matrix.fixture }}-${{ github.run_attempt }}
+          artifact-retention-days: '30'
+
+      - name: Assert the expected outcome
+        env:
+          FIXTURE: ${{ matrix.fixture }}
+          OUTCOME: ${{ steps.ccox.outcome }}
+          STATUS: ${{ steps.ccox.outputs.status }}
+          VIOLATIONS: ${{ steps.ccox.outputs.violations }}
+          REPORT_FILE: ${{ steps.ccox.outputs.report-file }}
+        run: node test/selftest/assert-report.mjs

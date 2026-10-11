@@ -1,10 +1,1 @@
-{
-  "error": {
-    "code": 400,
-    "message": "Provider returned error",
-    "metadata": {
-      "raw": "{\"error\":\"response_format is not supported by this model\"}",
-      "provider_name": "Nvidia"
-    }
-  }
-}
+{"error":{"message":"No endpoints found that can handle the requested parameters. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection","code":404,"metadata":{"routing_funnel":[{"step":"Initial Endpoints","endpoint_count":1}],"failed_routing_step":"Filter by Parameters"}}}

@@ -15,23 +15,29 @@ const schema = verdictSchema(definition.rules);
 const { scanned } = partitionFiles(parseUnifiedDiff(read('./fixtures/diffs/pr.diff')), compileAllowlist(['crates/']));
 const judge = (mode, name) => judgeResponse({ mode, data: response(name), schema, files: scanned });
 
+// The violations exactly as the live model answered (fixtures/responses/provenance.json).
 const EXPECTED_VIOLATION = {
-  file: 'crates/core/src/lib.rs', line_start: 6, line_end: 6, rule: 'io-in-core',
-  explanation: 'load() reads the filesystem directly with std::fs inside the core crate; route it through an injected storage port.',
-  evidence: 'std::fs::read_to_string(path).unwrap()',
+  file: 'crates/core/src/lib.rs', line_start: 5, line_end: 7, rule: 'io-in-core',
+  explanation: 'Core file reads filesystem via std::fs::read_to_string, violating io-in-core rule.',
+  evidence: 'pub fn load(path: &str) -> String {    std::fs::read_to_string(path).unwrap()}',
+};
+const TEXT_VIOLATION = {
+  ...EXPECTED_VIOLATION,
+  explanation: 'The added function `load` uses `std::fs::read_to_string` to read from the filesystem, which is prohibited in core business logic.',
+  evidence: 'pub fn load(path: &str) -> String {\n    std::fs::read_to_string(path).unwrap()\n}',
 };
 
-for (const [mode, name] of [
-  ['tool_call', 'tool_call-violation.json'],
-  ['tool_call', 'tool_call-arguments-object.json'],
-  ['json_schema', 'json_schema-violation.json'],
-  ['text', 'text-violation.json'],
+for (const [mode, name, expected] of [
+  ['tool_call', 'tool_call-violation.json', EXPECTED_VIOLATION],
+  ['tool_call', 'tool_call-arguments-object.json', EXPECTED_VIOLATION],
+  ['json_schema', 'json_schema-violation.json', EXPECTED_VIOLATION],
+  ['text', 'text-violation.json', TEXT_VIOLATION],
 ]) {
   test(`${mode}: ${name} parses to one violation`, () => {
     const r = judge(mode, name);
     assert.equal(r.status, 'violations');
     assert.equal(r.verdict, 'non_compliant');
-    assert.deepEqual(r.violations, [EXPECTED_VIOLATION]);
+    assert.deepEqual(r.violations, [expected]);
     assert.equal(r.error, null);
   });
 }
@@ -45,11 +51,12 @@ test('tool_call: compliant answer is a pass with no violations', () => {
 test('a response for one mode does not parse under another (no silent fallback)', () => {
   assert.equal(judge('json_schema', 'tool_call-violation.json').error.kind, 'parse');
   assert.equal(judge('tool_call', 'json_schema-violation.json').error.kind, 'parse');
-  assert.equal(judge('text', 'json_schema-violation.json').error.kind, 'parse');
+  assert.equal(judge('text', 'tool_call-violation.json').error.kind, 'parse');
 });
 
 for (const [name, mode, kind] of [
   ['text-two-blocks.json', 'text', 'parse'],
+  ['text-prose-and-json.json', 'text', 'parse'],
   ['tool_call-bad-json.json', 'tool_call', 'parse'],
   ['tool_call-length.json', 'tool_call', 'parse'],
   ['tool_call-prose-only.json', 'tool_call', 'parse'],
@@ -100,10 +107,12 @@ test('injection suspected + compliant is an error, not a pass; the flag surfaces
 });
 
 test('injection suspected + violations keeps the violations and the flag', () => {
-  const r = judge('tool_call', 'tool_call-injection-violation.json');
+  // Recorded on injection.diff, so judged against that diff's scoped files.
+  const files = partitionFiles(parseUnifiedDiff(read('./fixtures/diffs/injection.diff')), compileAllowlist(['crates/'])).scanned;
+  const r = judgeResponse({ mode: 'tool_call', data: response('tool_call-injection-violation.json'), schema, files });
   assert.equal(r.status, 'violations');
   assert.equal(r.injection_suspected, true);
-  assert.equal(r.violations.length, 1);
+  assert.deepEqual(r.violations.map((v) => [v.file, v.line_start, v.line_end, v.rule]), [['crates/ledger-core/src/export.rs', 24, 24, 'io-in-core']]);
 });
 
 test('schema validator rejects wrong types, missing keys and bad integers', () => {

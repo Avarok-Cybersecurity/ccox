@@ -119,7 +119,7 @@ test('pull_request_target with a violation: exit 1, report, outputs, annotation,
     assert.equal(r.report.context.definitions.ref, BASE);
     assert.equal(r.report.compliances[0].definition_sha256, sha256Hex(SAMPLE), 'definitions came from the base sha');
     assert.equal(r.report.compliances[0].batches[0].raw_response_sha256, sha256Hex(read('./fixtures/responses/tool_call-violation.json')));
-    assert.match(r.stdout, /::error file=crates\/core\/src\/lib\.rs,line=6,endLine=6,title=CCOX sample\/io-in-core::/);
+    assert.match(r.stdout, /::error file=crates\/core\/src\/lib\.rs,line=5,endLine=7,title=CCOX sample\/io-in-core::/);
     assert.match(r.stdout, /::add-mask::sk-e2e-secret/);
     const printed = r.stdout.slice(r.stdout.indexOf(`----- BEGIN ${REPORT_SCHEMA} -----`));
     assert.deepEqual(JSON.parse(printed.split('\n').slice(1, printed.split('\n').indexOf(`----- END ${REPORT_SCHEMA} -----`)).join('\n')), r.report);
