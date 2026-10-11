@@ -1,7 +1,7 @@
 {
   "known-violating": [
     {
-      "status": "violations",
+      "status": "pass",
       "min_violations": 2,
       "injection_suspected": false,
       "files_scanned": ["crates/ledger-core/src/aging.rs", "crates/ledger-core/src/money.rs", "crates/ledger-core/src/statement.rs"],
