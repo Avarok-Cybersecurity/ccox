@@ -3,105 +3,13 @@
 // GitHub and the model endpoint.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { sha256Hex } from '../src/core/hash.mjs';
 import { COMMENT_MARKER, REPORT_SCHEMA } from '../src/core/report.mjs';
-import { startFakeServices } from './helpers/fake-services.mjs';
-
-const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
-const MAIN = new URL('../src/main.mjs', import.meta.url).pathname;
-const BASE = 'a'.repeat(40);
-const HEAD = 'b'.repeat(40);
-const SAMPLE = read('./fixtures/definitions/sample.md');
-const WEAKENED = SAMPLE.replace(/## Rules[\s\S]*?## Compliant/, '## Rules\n\n- `io-in-core`: anything goes.\n\n## Compliant');
-const PR_DIFF = read('./fixtures/diffs/pr.diff');
-const answer = (name, status = 200) => ({ status, body: read(`./fixtures/responses/${name}`) });
-
-const TREES = {
-  [BASE]: { compliances: [{ name: 'sample.md', text: SAMPLE }] },
-  // The head carries a weakened copy: CCOX must never read it.
-  [HEAD]: { compliances: [{ name: 'sample.md', text: WEAKENED }] },
-};
-
-function inputs(services, overrides = {}) {
-  return {
-    provider: 'openrouter',
-    endpoint: `${services.url}/llm`,
-    'api-key': 'sk-e2e-secret',
-    model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
-    'structured-mode': 'tool_call',
-    'allowed-directories': 'crates/',
-    'compliance-definitions-path': 'compliances',
-    'max-diff-bytes': '60000',
-    seed: '42',
-    'reasoning-effort': 'low',
-    'max-tokens': '4096',
-    'request-timeout-ms': '10000',
-    'max-retries': '1',
-    'report-dir': 'out',
-    'artifact-name': 'ccox-report-test-1',
-    'artifact-retention-days': '90',
-    'comment-on-pr': 'true',
-    'github-token': 'ghs_e2e',
-    'diff-file': '',
-    ...overrides,
-  };
-}
-
-async function runAction({ services, eventName, event, overrides }) {
-  const dir = mkdtempSync(join(tmpdir(), 'ccox-e2e-'));
-  const eventPath = join(dir, 'event.json');
-  writeFileSync(eventPath, JSON.stringify(event));
-  const outputFile = join(dir, 'output.txt');
-  const summaryFile = join(dir, 'summary.md');
-  writeFileSync(outputFile, '');
-  writeFileSync(summaryFile, '');
-  const env = {
-    PATH: process.env.PATH,
-    GITHUB_ACTIONS: 'true',
-    GITHUB_WORKSPACE: dir,
-    GITHUB_EVENT_PATH: eventPath,
-    GITHUB_EVENT_NAME: eventName,
-    GITHUB_REPOSITORY: 'o/r',
-    GITHUB_API_URL: `${services.url}/api`,
-    GITHUB_OUTPUT: outputFile,
-    GITHUB_STEP_SUMMARY: summaryFile,
-    GITHUB_RUN_ID: '1001',
-    GITHUB_RUN_ATTEMPT: '1',
-    GITHUB_JOB: 'ccox',
-    GITHUB_SERVER_URL: 'https://github.com',
-  };
-  for (const [name, value] of Object.entries(inputs(services, overrides))) {
-    env[`INPUT_${name.replace(/-/g, '_').toUpperCase()}`] = value;
-  }
-  const { code, stdout } = await new Promise((resolve) => {
-    execFile(process.execPath, [MAIN], { env }, (error, out) => resolve({ code: error ? error.code : 0, stdout: out }));
-  });
-  const outputs = {};
-  for (const m of readFileSync(outputFile, 'utf8').matchAll(/^([a-z-]+)<<(\S+)\n([\s\S]*?)\n\2$/gm)) outputs[m[1]] = m[3];
-  let report = null;
-  try {
-    report = JSON.parse(readFileSync(join(dir, 'out', 'ccox-report.json'), 'utf8'));
-  } catch {
-    report = null;
-  }
-  return { code, stdout, outputs, report, summary: readFileSync(summaryFile, 'utf8'), dir };
-}
-
-const prEvent = { pull_request: { number: 7, base: { sha: BASE }, head: { sha: HEAD } } };
-
-async function withServices(options, fn) {
-  const services = await startFakeServices({ diff: PR_DIFF, changedFiles: 2, baseSha: BASE, headSha: HEAD, trees: TREES, ...options });
-  try {
-    await fn(services);
-  } finally {
-    await services.close();
-  }
-}
+import {
+  BASE, HEAD, SAMPLE, TREES, answer, prEvent, read, runAction, withServices,
+} from './helpers/action-run.mjs';
 
 test('pull_request_target with a violation: exit 1, report, outputs, annotation, sticky comment', () => withServices(
   { completions: [answer('tool_call-violation.json')] },
@@ -118,7 +26,7 @@ test('pull_request_target with a violation: exit 1, report, outputs, annotation,
     assert.deepEqual(r.report.scope.files_excluded, ['docs/crates/notes.md']);
     assert.equal(r.report.context.definitions.ref, BASE);
     assert.equal(r.report.compliances[0].definition_sha256, sha256Hex(SAMPLE), 'definitions came from the base sha');
-    assert.equal(r.report.compliances[0].batches[0].raw_response_sha256, sha256Hex(read('./fixtures/responses/tool_call-violation.json')));
+    assert.equal(r.report.compliances[0].batches[0].raw_response_sha256, sha256Hex(read('fixtures/responses/tool_call-violation.json')));
     assert.match(r.stdout, /::error file=crates\/core\/src\/lib\.rs,line=5,endLine=7,title=CCOX sample\/io-in-core::/);
     assert.match(r.stdout, /::add-mask::sk-e2e-secret/);
     const printed = r.stdout.slice(r.stdout.indexOf(`----- BEGIN ${REPORT_SCHEMA} -----`));
@@ -192,7 +100,7 @@ test('definitions missing at the base sha: exit 2, kind github, model never call
   },
 ));
 
-test('GitHub file count disagrees with the diff: diff_truncated, exit 2', () => withServices(
+test('GitHub file count disagrees with the listing: diff_truncated, exit 2', () => withServices(
   { completions: [answer('tool_call-compliant.json')], changedFiles: 3 },
   async (services) => {
     const r = await runAction({ services, eventName: 'pull_request_target', event: prEvent });

@@ -8,8 +8,9 @@ export const ERROR_KINDS = Object.freeze([
   'definitions', // compliance definitions are missing or malformed
   'github', // a GitHub API call failed
   'diff', // the diff is malformed
-  'diff_truncated', // the diff is incomplete
-  'diff_too_large', // GitHub refused or capped the diff
+  'diff_truncated', // the diff or the changed-file listing is incomplete
+  'diff_too_large', // more changed files than GitHub can list completely
+  'diff_unavailable', // an in-scope file has no patch and its contents could not be read
   'file_over_budget', // one in-scope file alone exceeds max-diff-bytes
   'provider', // the model endpoint failed
   'quota', // a daily allowance is exhausted; retrying will not help

@@ -152,10 +152,18 @@ export function renderSummary(report) {
   }
   if (report.scope) {
     const s = report.scope;
+    const binary = s.files_skipped.filter((f) => f.reason === 'binary').length;
+    const listed = s.files_expected === null ? `${s.files_changed}` : `${s.files_changed} of ${s.files_expected}`;
     out.push(
-      `Scope: ${s.files_scanned.length} file(s) judged, ${s.files_excluded.length} outside allowed-directories, ` +
-        `${s.files_skipped.length} skipped, ${s.batches} batch(es).`,
+      `Scope: ${listed} changed file(s) listed; ${s.files_scanned.length} judged, ${s.files_excluded.length} outside allowed-directories, ` +
+        `${s.files_skipped.length} skipped (${binary} binary, not judged), ${s.batches} batch(es).`,
     );
+    if (s.files_without_patch.length > 0) {
+      out.push(
+        `${s.files_without_patch.length} file(s) came without a patch from GitHub; ` +
+          `${s.files_content_diffed.length} in scope were diffed from their base and head contents.`,
+      );
+    }
   }
   if (report.model) out.push(`Model: ${mdCell(report.model.model, 120)} (${report.model.structured_mode}).`);
   out.push(`Report: \`${REPORT_SCHEMA}\` in the job log and the workflow artifact.`, '');

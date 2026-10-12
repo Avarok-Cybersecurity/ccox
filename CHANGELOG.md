@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-11
+
+### Fixed
+
+- Large pull requests can be judged. 1.0.0 fetched the diff through GitHub's
+  single-diff media type, which GitHub refuses (HTTP 406) past 300 files or
+  20,000 lines, so on such a pull request the run always ended in
+  `diff_too_large` and the required check could never pass. CCOX now lists the
+  changed files and their patches through the files API instead: the pull
+  request's files (paged, up to GitHub's 3,000-file limit) on `pull_request` /
+  `pull_request_target`; `compare base...head` on `merge_group`, falling back
+  to the head commit's files when compare reaches its 300-file cap and the
+  group is one squash on the base.
+- Completeness is verified, not assumed: the listing must name exactly the
+  pull request's `changed_files` distinct files, or, for the commit fallback,
+  add up to the commit's line stats. Otherwise the run fails closed
+  (`diff_truncated` / `diff_too_large`).
+
+### Added
+
+- In-scope files that GitHub lists without a patch (very large file diffs)
+  are diffed from their merge-base and head contents with a built-in minimal
+  line diff (no dependency), then batched and judged like any other file.
+  Binary files are reported as skipped with reason `binary` and never judged.
+  If the contents cannot be read, the run fails with the new error kind
+  `diff_unavailable` naming the file. Files outside `allowed-directories` are
+  never read.
+- `ccox-report/v1` additions (compatible): `scope.files_expected`,
+  `scope.files_without_patch`, `scope.files_content_diffed`, the
+  `context.diff_source` value `commit`, and the error kind
+  `diff_unavailable`. The summary states how many changed files were listed
+  against GitHub's count, and how many were binary.
+
 ### Changed
 
 - The README usage example and the live self-test use the dedicated secret
@@ -14,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with other workflows.
 - CCOX runs on its own pull requests (`.github/workflows/ccox.yml`, scope
   `src/`).
+- The single-diff fetch path is removed; a unified diff is parsed only from
+  the `diff-file` input (self-tests).
 
 ## [1.0.0] - 2026-10-11
 

@@ -17,9 +17,12 @@ parse path that reads as a pass) is a security issue.
 
 ## What CCOX guarantees
 
-- It never checks out, builds or executes pull-request code. The diff is read
-  as text through the GitHub API, which is what makes `pull_request_target`
-  safe here.
+- It never checks out, builds or executes pull-request code. The changed files,
+  their patches and (for an in-scope file without a patch) their contents are
+  read as text through the GitHub API, which is what makes
+  `pull_request_target` safe here.
+- It judges the whole in-scope diff or none of it: a listing that cannot be
+  proven complete, or an in-scope file whose diff cannot be read, is an error.
 - Compliance definitions configured with `compliance-definitions-path` are read
   at the base commit, never from the pull request's head.
 - Every failure (inputs, event, definitions, GitHub, diff, provider, quota,

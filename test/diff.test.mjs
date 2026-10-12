@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { newSideRanges, parseUnifiedDiff, unquoteGitPath } from '../src/core/diff.mjs';
+import { newSideRanges, parsePatch, parseUnifiedDiff, unquoteGitPath } from '../src/core/diff.mjs';
 import { CcoxError } from '../src/core/errors.mjs';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/diffs/${name}`, import.meta.url), 'utf8');
@@ -83,4 +83,16 @@ test('a hunk with more lines than its header declares is rejected', () => {
 test('text outside any diff section is rejected', () => {
   assert.throws(() => parseUnifiedDiff('hello\n'), (e) => e.kind === 'diff');
   assert.deepEqual(parseUnifiedDiff(''), []);
+});
+
+test('a GitHub patch (hunks only) parses exactly like the same hunks in a unified diff', () => {
+  const full = byPath(parseUnifiedDiff(fixture('pr.diff'))).get('crates/core/src/lib.rs');
+  const patch = fixture('pr.diff').split('\n').slice(4, 12).join('\n');
+  assert.deepEqual(parsePatch(patch, 'crates/core/src/lib.rs'), full.hunks);
+  assert.deepEqual(parsePatch('', 'empty.rs'), []);
+});
+
+test('a patch line outside any hunk, or a hunk cut short, is refused', () => {
+  assert.throws(() => parsePatch('@@ -1 +1 @@\n-a\n+b\n+stray', 'f.rs'), (e) => e instanceof CcoxError && e.kind === 'diff' && /outside any hunk/.test(e.message));
+  assert.throws(() => parsePatch('@@ -1,2 +1,2 @@\n-a\n+b', 'f.rs'), (e) => e.kind === 'diff_truncated');
 });
