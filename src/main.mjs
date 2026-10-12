@@ -17,8 +17,14 @@ import {
   INPUT_SPEC, actionIdentity, parseInputs, planDefinitionsSource, planDiffSource, resolveEventContext,
 } from './core/inputs.mjs';
 import { parseUnifiedDiff } from './core/diff.mjs';
+import {
+  COMMIT_FILES_CAP, PULL_FILES_CAP, commitFallbackProblem, compareListingComplete, completeListing, planListing,
+  verifyCommitListing, verifyPullListing,
+} from './core/listing.mjs';
 import { batchFiles, compileAllowlist, partitionFiles } from './core/scope.mjs';
-import { buildMessages, buildRequestBody, loadDefinitions, renderFileDiff } from './core/prompt.mjs';
+import {
+  buildMessages, buildRequestBody, loadDefinitions, maxRenderableLines, renderFileDiff,
+} from './core/prompt.mjs';
 import { judgeResponse, verdictSchema } from './core/verdict.mjs';
 import {
   COMMENT_MARKER, aggregateCompliance, buildReport, exitCodeFor, renderReportBlock, renderSummary,
@@ -59,22 +65,67 @@ function runRecord(env) {
   return { id, attempt: env.GITHUB_RUN_ATTEMPT ?? null, job: env.GITHUB_JOB ?? null, url };
 }
 
-async function loadDiff(config, ctx, github, workspace, state) {
+/**
+ * The complete changed-file listing for the event, verified: the pulls files
+ * API for a pull request; compare for a merge group, or its head commit when
+ * compare is capped. `oldRef` resolves the commit the listing diffs from.
+ */
+async function listChangedFiles(source, ctx, github, state) {
+  if (source.type === 'pulls') {
+    const r = await github.pullFiles(source.pr, PULL_FILES_CAP);
+    if (r.headSha !== ctx.headSha) {
+      throw new CcoxError('event', `PR #${source.pr} head is ${r.headSha}, but this run is for ${ctx.headSha}; the newer run judges the newer head`);
+    }
+    verifyPullListing({ pr: source.pr, entries: r.entries, changedFiles: r.changedFiles });
+    // The PR diff is three-dot: its old side is the merge base, read only when a file needs it.
+    const oldRef = async () => (await github.compareFiles(r.baseSha, r.headSha)).mergeBase;
+    return { entries: r.entries, expected: r.changedFiles, oldRef, newRef: r.headSha };
+  }
+  const compare = await github.compareFiles(source.base, source.head);
+  if (compareListingComplete(compare.entries)) {
+    return { entries: compare.entries, expected: null, oldRef: async () => compare.mergeBase, newRef: source.head };
+  }
+  const commit = await github.commitFiles(source.head, COMMIT_FILES_CAP);
+  const problem = commitFallbackProblem({ parents: commit.parents, baseSha: source.base });
+  if (problem) {
+    throw new CcoxError('diff_too_large', `compare lists ${compare.entries.length} files, its cap, so the merge group cannot be listed completely: ${problem}`);
+  }
+  verifyCommitListing({ sha: source.head, entries: commit.entries, stats: commit.stats });
+  state.context.diff_source = 'commit';
+  return { entries: commit.entries, expected: null, oldRef: async () => source.base, newRef: source.head };
+}
+
+/** Both versions of every file GitHub listed without a patch that CCOX must judge. */
+async function readContents(github, requests, listed) {
+  const texts = new Map();
+  if (requests.length === 0) return texts;
+  const oldRef = await listed.oldRef();
+  for (const req of requests) {
+    try {
+      if (!oldRef) throw new CcoxError('github', 'GitHub named no merge base to read the old version at');
+      const oldText = req.status === 'added' ? '' : await github.fileText(req.oldPath, oldRef);
+      texts.set(req.path, { oldText, newText: await github.fileText(req.path, listed.newRef) });
+    } catch (e) {
+      const { kind, message } = toErrorRecord(e);
+      throw new CcoxError('diff_unavailable', `${req.path}: GitHub listed it without a patch and its contents could not be read (${kind}: ${message})`);
+    }
+  }
+  return texts;
+}
+
+/** The changed files as parsed records, plus how the listing was obtained. */
+async function loadDiff(config, ctx, github, workspace, state, allowlist) {
   const source = planDiffSource(config, ctx);
   state.context.diff_source = source.type;
   if (source.type === 'diff-file') {
     const path = isAbsolute(source.path) ? source.path : resolve(workspace, source.path);
-    return { text: readText(path, 'diff'), expectedFiles: null };
+    return { files: parseUnifiedDiff(readText(path, 'diff')), expected: null, withoutPatch: [], contentDiffed: [] };
   }
-  if (source.type === 'pulls') {
-    const r = await github.pullDiff(source.pr);
-    if (r.headSha !== ctx.headSha) {
-      throw new CcoxError('event', `PR #${source.pr} head is ${r.headSha}, but this run is for ${ctx.headSha}; the newer run judges the newer head`);
-    }
-    return { text: r.diff, expectedFiles: r.expectedFiles };
-  }
-  const r = await github.compareDiff(source.base, source.head);
-  return { text: r.diff, expectedFiles: r.expectedFiles };
+  const listed = await listChangedFiles(source, ctx, github, state);
+  const plan = planListing(listed.entries, allowlist);
+  const texts = await readContents(github, plan.requests, listed);
+  const { files, contentDiffed } = completeListing(plan, texts, maxRenderableLines(config.maxDiffBytes));
+  return { files, expected: listed.expected, withoutPatch: plan.withoutPatch, contentDiffed };
 }
 
 async function judgeAll(config, definitions, batches, deps) {
@@ -159,18 +210,18 @@ async function evaluate(env, deps, state) {
   const definitions = loadDefinitions(entries);
   log(`[ccox] ${definitions.length} compliance definition(s) from ${defSource.type}: ${definitions.map((d) => d.name).join(', ')}`);
 
-  const diff = await loadDiff(config, ctx, github, env.GITHUB_WORKSPACE, state);
-  const files = parseUnifiedDiff(diff.text);
-  if (diff.expectedFiles !== null && files.length !== diff.expectedFiles) {
-    throw new CcoxError('diff_truncated', `GitHub reports ${diff.expectedFiles} changed file(s) but the diff holds ${files.length}`);
-  }
   const allowlist = compileAllowlist(config.allowedDirectories);
+  const diff = await loadDiff(config, ctx, github, env.GITHUB_WORKSPACE, state, allowlist);
+  const { files } = diff;
   const { scanned, excluded, skipped } = partitionFiles(files, allowlist);
   const sizes = new Map(scanned.map((f) => [f, Buffer.byteLength(renderFileDiff(f))]));
   const batches = batchFiles(scanned, config.maxDiffBytes, (f) => sizes.get(f));
   state.scope = {
     allowed_directories: [...config.allowedDirectories],
     files_changed: files.length,
+    files_expected: diff.expected,
+    files_without_patch: diff.withoutPatch,
+    files_content_diffed: diff.contentDiffed,
     files_scanned: scanned.map((f) => f.path),
     files_excluded: excluded,
     files_skipped: skipped,
@@ -179,6 +230,9 @@ async function evaluate(env, deps, state) {
     batches: batches.length,
   };
   log(`[ccox] ${files.length} changed file(s): ${scanned.length} judged in ${batches.length} batch(es), ${excluded.length} out of scope, ${skipped.length} skipped`);
+  if (diff.withoutPatch.length > 0) {
+    log(`[ccox] ${diff.withoutPatch.length} file(s) listed without a patch; ${diff.contentDiffed.length} in scope diffed from their contents`);
+  }
   state.compliances = await judgeAll(config, definitions, batches, deps);
 }
 

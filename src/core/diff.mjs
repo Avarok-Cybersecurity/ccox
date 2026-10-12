@@ -1,4 +1,5 @@
-// diff.mjs — parse a git unified diff (as GitHub's diff media type returns it).
+// diff.mjs — parse a git unified diff (the diff-file input), and the per-file
+// patches of GitHub's files listings (parsePatch).
 //
 // Contract: every byte of input belongs to a `diff --git` section; hunk line
 // counts are honoured exactly, so a diff cut short mid-hunk raises
@@ -174,18 +175,44 @@ export function parseUnifiedDiff(text) {
       binary: rec.binary,
       hunks: [],
     };
-    while (i < lines.length && lines[i].startsWith('@@')) {
-      if (file.binary) throw new CcoxError('diff', `binary file ${path} carries a text hunk`);
-      const { hunk, next } = parseHunk(lines, i, path);
-      file.hunks.push(hunk);
-      i = next;
+    if (file.binary && i < lines.length && lines[i].startsWith('@@')) {
+      throw new CcoxError('diff', `binary file ${path} carries a text hunk`);
     }
+    ({ hunks: file.hunks, next: i } = parseHunks(lines, i, path));
     if (i < lines.length && !lines[i].startsWith('diff --git ')) {
       throw new CcoxError('diff', `unexpected line after the hunks of ${path}: ${JSON.stringify(lines[i].slice(0, 80))}`);
     }
     files.push(file);
   }
   return files;
+}
+
+/** Consecutive hunks starting at lines[start]; stops at the first line that opens no hunk. */
+function parseHunks(lines, start, path) {
+  const hunks = [];
+  let i = start;
+  while (i < lines.length && lines[i].startsWith('@@')) {
+    const { hunk, next } = parseHunk(lines, i, path);
+    hunks.push(hunk);
+    i = next;
+  }
+  return { hunks, next: i };
+}
+
+/**
+ * Parse the hunks of one file's patch, as GitHub's files listings carry it
+ * (`patch`: hunk text only, no `diff --git` header). Every line must belong
+ * to a hunk, with the same exact line accounting as parseUnifiedDiff.
+ */
+export function parsePatch(patch, path) {
+  if (typeof patch !== 'string') throw new CcoxError('diff', `patch of ${path} is not text`);
+  const lines = patch.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  const { hunks, next } = parseHunks(lines, 0, path);
+  if (next < lines.length) {
+    throw new CcoxError('diff', `patch of ${path} has a line outside any hunk: ${JSON.stringify(lines[next].slice(0, 80))}`);
+  }
+  return hunks;
 }
 
 function parseHeaderLine(lines, i, rec) {

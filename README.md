@@ -11,10 +11,10 @@ It is built to be a **required check** that cannot be talked into a pass:
 - **The rules come from the base branch.** Definitions are read through the
   contents API at the base commit, so a pull request cannot weaken the rules it
   is judged by.
-- **The diff is data, never code.** CCOX fetches the diff as text through the
-  API and never checks out or executes pull-request code. Inside the prompt,
-  the diff sits between sentinels carrying a per-run random nonce, with
-  explicit rules that nothing inside them is an instruction.
+- **The diff is data, never code.** CCOX lists the changed files and their
+  patches through the API and never checks out or executes pull-request code.
+  Inside the prompt, the diff sits between sentinels carrying a per-run random
+  nonce, with explicit rules that nothing inside them is an instruction.
 - **The answer is checked, not trusted.** The verdict must match a JSON Schema,
   name a rule id the definition declares, and cite a scoped file and a line
   range inside one of that file's hunks. Anything else is an error.
@@ -121,6 +121,42 @@ The step exits 0 on `pass`, 1 on `violations` and 2 on `error`. The report
 artifact is uploaded in every case. Violations are also emitted as file/line
 annotations, and the summary is added to the job's step summary.
 
+## Large pull requests
+
+CCOX judges the whole in-scope diff of a pull request of any size GitHub can
+list, and fails closed (`status: error`) wherever it cannot see all of it.
+GitHub's single-diff media type refuses diffs over 300 files or 20,000 lines,
+so CCOX does not use it.
+
+- **Pull requests** (`pull_request`, `pull_request_target`): the files API,
+  paged 100 at a time. GitHub lists at most 3,000 files; the listing must name
+  exactly the pull request's `changed_files` distinct files, else
+  `diff_truncated`. More than 3,000 changed files is `diff_too_large`.
+- **Merge groups** (`merge_group`): `compare base...head`. Compare lists at
+  most 300 files and gives no total, so a listing below 300 is complete. At
+  300 CCOX lists the group's head commit instead (paged, up to 3,000 files),
+  which equals the group's diff only when that commit's single parent is the
+  base: a one-entry squash merge queue (`max_entries_to_build: 1`,
+  `merge_method: SQUASH`). The commit's listed files must add up to its line
+  stats, else `diff_truncated`. Any other group shape over 300 files is
+  `diff_too_large`.
+- **Files without a patch.** GitHub omits the patch of binary files and of
+  very large file diffs. Scope is applied first: such a file outside
+  `allowed-directories` is only listed in the report. Inside it, CCOX reads the
+  base (merge-base) and head versions through the contents API and computes
+  the diff itself (minimal line diff, three lines of context). A binary file
+  (a NUL in its first 8,000 bytes, git's rule) is reported as skipped with
+  reason `binary` and not judged. If the contents cannot be read, the run fails
+  with `diff_unavailable` naming the file; a computed diff that cannot fit
+  `max-diff-bytes` is `file_over_budget`.
+- **Batching.** In-scope files are batched under `max-diff-bytes` as for any
+  diff, so a large pull request becomes several model requests per
+  compliance, each with the same seed and temperature 0.
+
+The report's `scope` records the listing: `files_changed` (listed),
+`files_expected` (GitHub's count, where it gives one), `files_without_patch`
+and `files_content_diffed`.
+
 ## Report
 
 The report format is specified in [docs/report-schema.md](docs/report-schema.md).
@@ -147,9 +183,10 @@ definition takes effect for pull requests opened after it lands.
 
 - **Trigger.** `pull_request_target` runs the workflow as it exists on the base
   branch, with access to secrets. That is safe only because CCOX never checks
-  out, builds or runs the pull request. It reads the diff as text through the
-  REST API (the pulls diff for pull requests, `compare base...head` for merge
-  queue entries).
+  out, builds or runs the pull request. It reads the changed files and their
+  patches as text through the REST API (see [Large pull requests](#large-pull-requests)).
+  File contents are read only as text, at a fixed sha, for an in-scope file
+  GitHub lists without a patch.
 - **Rules.** `compliance-definitions-path` is read at the base sha through the
   contents API, never from the head.
 - **Prompt injection.** The diff (including file names) is fenced by sentinels

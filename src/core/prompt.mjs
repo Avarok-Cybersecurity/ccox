@@ -57,6 +57,15 @@ export function loadDefinitions(entries) {
 }
 
 /**
+ * Every diff line renderFileDiff() emits takes at least 4 bytes (a gutter of
+ * at least one character, "|", the marker and the newline), so a file with
+ * more changed lines than this can never fit `maxDiffBytes`.
+ */
+export function maxRenderableLines(maxDiffBytes) {
+  return Math.floor(maxDiffBytes / 4);
+}
+
+/**
  * Render one file's hunks with a new-file line-number gutter, so the model
  * can cite lines. Format per line: `<new line, or blank>|<marker><text>`.
  */

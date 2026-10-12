@@ -44,9 +44,20 @@ Violations found before the failure stay visible in
 ### `error.kind`
 
 `input`, `event`, `definitions`, `github`, `diff`, `diff_truncated`,
-`diff_too_large`, `file_over_budget`, `provider`, `quota`, `timeout`, `parse`,
-`invalid_verdict`, `invalid_violation`, `injection_suspected`, `internal`
-(the list in `src/core/errors.mjs`).
+`diff_too_large`, `diff_unavailable`, `file_over_budget`, `provider`, `quota`,
+`timeout`, `parse`, `invalid_verdict`, `invalid_violation`,
+`injection_suspected`, `internal` (the list in `src/core/errors.mjs`).
+
+- `diff_truncated`: the diff is cut short, or the changed-file listing cannot
+  be proven complete (fewer or repeated files than the pull request's
+  `changed_files`, or a commit listing whose line counts do not add up to the
+  commit's stats).
+- `diff_too_large`: more changed files than GitHub can list completely (over
+  3,000 for a pull request; 300 or more for a merge group whose head commit is
+  not a single squash on the base).
+- `diff_unavailable` (since 1.1.0): GitHub listed an in-scope file without a
+  patch and its base or head contents could not be read. The message names the
+  file.
 
 - `quota`: the model's daily allowance is exhausted. It is not retried.
 - `invalid_violation`: the model cited a file outside the scoped batch, or a
@@ -64,7 +75,7 @@ Violations found before the failure stay visible in
 | `pr` | integer \| `null` | `null` on `merge_group` |
 | `base_sha`, `head_sha` | string \| `null` | the commits the diff spans |
 | `definitions` | `{ source, path, ref }` \| `null` | `source` is `base-ref` (read at `ref`, the base sha) or `bundled` |
-| `diff_source` | `pulls` \| `compare` \| `diff-file` \| `null` | |
+| `diff_source` | `pulls` \| `compare` \| `commit` \| `diff-file` \| `null` | `pulls`: the pull request's files API; `compare`: `compare base...head`; `commit`: the merge group head commit's files (compare was capped); `diff-file`: the `diff-file` input |
 | `run` | `{ id, attempt, job, url }` | from the runner; `null` members outside Actions |
 
 ### `scope`
@@ -72,10 +83,13 @@ Violations found before the failure stay visible in
 | field | type | notes |
 |---|---|---|
 | `allowed_directories` | string[] | the regexes as given (matched at the start of the path) |
-| `files_changed` | integer | files in the diff |
+| `files_changed` | integer | files listed by GitHub, or in `diff-file` |
+| `files_expected` | integer \| `null` | the pull request's `changed_files`, which `files_changed` must equal; `null` where GitHub gives no count (`compare`, `commit`, `diff-file`). Since 1.1.0 |
+| `files_without_patch` | string[] | files GitHub listed without a patch (binary, or a diff too large to inline), in or out of scope. Since 1.1.0 |
+| `files_content_diffed` | string[] | in-scope files among those whose diff CCOX computed from their base and head contents. Since 1.1.0 |
 | `files_scanned` | string[] | judged by the model |
 | `files_excluded` | string[] | outside `allowed-directories` |
-| `files_skipped` | `{ path, reason }[]` | in scope with nothing to judge: `binary`, `deleted`, `no_content_change` |
+| `files_skipped` | `{ path, reason }[]` | in scope with nothing to judge: `binary` (excluded binary file, never sent to the model), `deleted`, `no_content_change` (including a rename GitHub lists with no changed lines and no patch) |
 | `scanned_bytes` | integer | rendered diff bytes sent, summed over files |
 | `max_diff_bytes` | integer | the per-request budget |
 | `batches` | integer | requests per compliance |
@@ -123,3 +137,9 @@ HTTP response body, `null` when no response was received.
 
 Additive fields may appear in later `v1` releases. Any change to an existing
 field's meaning or type ships as `ccox-report/v2`.
+
+1.1.0 is additive and stays `ccox-report/v1`: new `scope` fields
+(`files_expected`, `files_without_patch`, `files_content_diffed`), the
+`diff_source` value `commit`, and the error kind `diff_unavailable`.
+`files_changed` still counts the changed files; they now come from GitHub's
+files listings instead of a single diff.
